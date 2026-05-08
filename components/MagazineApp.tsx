@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Cover } from "./Cover";
 import { Article } from "./Article";
 import { DisplayAd } from "./DisplayAd";
@@ -35,6 +36,7 @@ export function MagazineApp({
   agents,
   prefs: initialPrefs,
 }: Props) {
+  const router = useRouter();
   const [mode, setMode] = useState<Mode>(initialPrefs.default_mode);
   const [prefs, setPrefs] = useState<Preferences>(initialPrefs);
   const [drawerOpen, setDrawerOpen] = useState(!initialPrefs.onboarded);
@@ -44,6 +46,7 @@ export function MagazineApp({
     article: ArticleT;
   } | null>(null);
   const [phase, setPhase] = useState<"flip" | "settle" | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
 
   const agentById = useMemo(
     () => new Map(agents.map((a) => [a.id, a])),
@@ -94,6 +97,19 @@ export function MagazineApp({
         onboarded: true,
       }),
     });
+  }
+
+  async function regenerateIssue() {
+    setRegenerating(true);
+    try {
+      const res = await fetch("/api/issues/generate", { method: "POST" });
+      const json = await res.json();
+      if (json.issue_id) {
+        router.refresh();
+      }
+    } finally {
+      setRegenerating(false);
+    }
   }
 
   useEffect(() => {
@@ -164,7 +180,10 @@ export function MagazineApp({
         firstRun={!prefs.onboarded}
         onClose={() => setDrawerOpen(false)}
         onSave={savePrefs}
+        onRegenerate={regenerateIssue}
       />
+
+      {regenerating && <PressOverlay />}
 
       <MastheadModal
         open={mastheadOpen}
@@ -185,6 +204,56 @@ export function MagazineApp({
           onClose={() => setChat(null)}
         />
       )}
+    </div>
+  );
+}
+
+function PressOverlay() {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 250,
+        background: "rgba(15,10,5,.78)",
+        backdropFilter: "blur(6px)",
+        display: "grid",
+        placeItems: "center",
+        color: "#f4ecd8",
+        fontFamily: "var(--serif-body)",
+        textAlign: "center",
+        padding: 32,
+      }}
+    >
+      <div style={{ maxWidth: 460 }}>
+        <div
+          style={{
+            fontFamily: "var(--mono)",
+            fontSize: 11,
+            letterSpacing: ".25em",
+            opacity: 0.7,
+            marginBottom: 12,
+          }}
+        >
+          GOING TO PRESS
+        </div>
+        <div
+          style={{
+            fontFamily: "var(--serif-display)",
+            fontWeight: 800,
+            fontSize: 32,
+            lineHeight: 1.15,
+            marginBottom: 12,
+          }}
+        >
+          The team is rewriting your edition.
+        </div>
+        <p style={{ opacity: 0.8, lineHeight: 1.5 }}>
+          Six writers, both registers, real and Sigma. This usually takes
+          two to three minutes. The page will refresh on its own when the
+          first copies come off the press.
+        </p>
+      </div>
     </div>
   );
 }

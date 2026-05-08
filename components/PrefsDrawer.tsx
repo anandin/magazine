@@ -29,9 +29,17 @@ interface Props {
   firstRun: boolean;
   onClose: () => void;
   onSave: (next: Preferences) => Promise<void> | void;
+  onRegenerate?: () => Promise<void> | void;
 }
 
-export function PrefsDrawer({ open, prefs, firstRun, onClose, onSave }: Props) {
+export function PrefsDrawer({
+  open,
+  prefs,
+  firstRun,
+  onClose,
+  onSave,
+  onRegenerate,
+}: Props) {
   const [draft, setDraft] = useState<Preferences>(prefs);
   const [busy, setBusy] = useState(false);
 
@@ -61,6 +69,23 @@ export function PrefsDrawer({ open, prefs, firstRun, onClose, onSave }: Props) {
     setBusy(true);
     try {
       await onSave({ ...draft, onboarded: true });
+      // First-run readers expect a personalized issue. Trigger a fresh
+      // generation as part of the welcome flow; the parent shows the
+      // progress overlay while it runs.
+      if (firstRun && onRegenerate) {
+        await onRegenerate();
+      }
+      onClose();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveAndRegenerate() {
+    setBusy(true);
+    try {
+      await onSave({ ...draft, onboarded: true });
+      if (onRegenerate) await onRegenerate();
       onClose();
     } finally {
       setBusy(false);
@@ -258,17 +283,37 @@ export function PrefsDrawer({ open, prefs, firstRun, onClose, onSave }: Props) {
 
         <footer className="mag-drawer-foot">
           <span className="mag-drawer-foot-note">
-            Saved to your account. The writers will see your settings on the next
-            issue.
+            {firstRun
+              ? "Saving will commission your first issue with these settings (~2 min)."
+              : "Saved settings shape the next 7am / 7pm issue. Want one now?"}
           </span>
-          <button
-            type="button"
-            className="mag-drawer-save"
-            onClick={save}
-            disabled={busy}
-          >
-            {busy ? "Saving…" : firstRun ? "Open my issue →" : "Save preferences"}
-          </button>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {!firstRun && onRegenerate && (
+              <button
+                type="button"
+                className="mag-drawer-save"
+                onClick={saveAndRegenerate}
+                disabled={busy}
+                style={{ background: "transparent", color: "var(--ink)", border: "1px solid var(--ink)" }}
+              >
+                {busy ? "Working…" : "Save & regenerate now"}
+              </button>
+            )}
+            <button
+              type="button"
+              className="mag-drawer-save"
+              onClick={save}
+              disabled={busy}
+            >
+              {busy
+                ? firstRun
+                  ? "Going to press…"
+                  : "Saving…"
+                : firstRun
+                  ? "Open my issue →"
+                  : "Save preferences"}
+            </button>
+          </div>
         </footer>
       </div>
     </div>

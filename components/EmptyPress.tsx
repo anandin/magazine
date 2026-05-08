@@ -171,6 +171,7 @@ export function EmptyPress({
         firstRun={!prefs.onboarded}
         onClose={() => setDrawerOpen(false)}
         onSave={savePrefs}
+        onRegenerate={generate}
       />
     </div>
   );
