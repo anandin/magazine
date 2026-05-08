@@ -100,8 +100,7 @@ async function generateDisplay(): Promise<DisplayPair[]> {
     messages: [{ role: "user", content: DISPLAY_PROMPT }],
   });
   const text = r.content
-    .filter((b): b is { type: "text"; text: string } => b.type === "text")
-    .map((b) => b.text)
+    .flatMap((b) => (b.type === "text" ? [b.text] : []))
     .join("\n");
   return parseDisplayAds(text);
 }
@@ -114,8 +113,7 @@ async function generateClassifieds(): Promise<ClassifiedPair[]> {
     messages: [{ role: "user", content: CLASSIFIEDS_PROMPT }],
   });
   const text = r.content
-    .filter((b): b is { type: "text"; text: string } => b.type === "text")
-    .map((b) => b.text)
+    .flatMap((b) => (b.type === "text" ? [b.text] : []))
     .join("\n");
   return parseClassifieds(text);
 }

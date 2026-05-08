@@ -16,9 +16,14 @@ export const MODEL = "claude-opus-4-7";
 export const MODEL_FAST = "claude-sonnet-4-6";
 
 // Anthropic's hosted web search tool. The API runs the search; the model
-// receives the results and can decide to search again.
-export const WEB_SEARCH_TOOL = {
+// receives the results and can decide to search again. The SDK's TS types
+// model only client-side tools (which require an input_schema), so we cast
+// at the call site via WEB_SEARCH_TOOLS.
+const WEB_SEARCH_TOOL = {
   type: "web_search_20250305" as const,
   name: "web_search",
   max_uses: 5,
 };
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const WEB_SEARCH_TOOLS: any = [WEB_SEARCH_TOOL];

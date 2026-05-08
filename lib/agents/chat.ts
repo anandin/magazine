@@ -87,8 +87,7 @@ ${sourceList}`;
   });
 
   const reply = response.content
-    .filter((b): b is { type: "text"; text: string } => b.type === "text")
-    .map((b) => b.text)
+    .flatMap((b) => (b.type === "text" ? [b.text] : []))
     .join("\n")
     .trim();
 

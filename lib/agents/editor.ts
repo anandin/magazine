@@ -1,4 +1,4 @@
-import { anthropic, MODEL_FAST, WEB_SEARCH_TOOL } from "@/lib/anthropic";
+import { anthropic, MODEL_FAST, WEB_SEARCH_TOOLS } from "@/lib/anthropic";
 import { getPreferences } from "@/lib/personalize";
 import { listPersonas } from "@/lib/agents/personas";
 import { writeArticle } from "@/lib/agents/writer";
@@ -61,13 +61,12 @@ Use web_search to find real recent stories from the last week, then assign one t
     model: MODEL_FAST,
     max_tokens: 2048,
     system: EDITOR_SYSTEM,
-    tools: [WEB_SEARCH_TOOL],
+    tools: WEB_SEARCH_TOOLS,
     messages: [{ role: "user", content: userPrompt }],
   });
 
   const text = response.content
-    .filter((b): b is { type: "text"; text: string } => b.type === "text")
-    .map((b) => b.text)
+    .flatMap((b) => (b.type === "text" ? [b.text] : []))
     .join("\n");
 
   return parsePlan(text, personas);
@@ -84,7 +83,7 @@ function parsePlan(raw: string, personas: Persona[]): IssuePlan {
   const assignments: Assignment[] = [];
   const re = /<assign\s+agent="([^"]+)"\s*>([\s\S]*?)<\/assign>/gi;
   let m: RegExpExecArray | null;
-  const validSlugs = new Set(personas.map((p) => p.slug));
+  const validSlugs = new Set<string>(personas.map((p) => p.slug));
   while ((m = re.exec(block)) !== null) {
     if (!validSlugs.has(m[1])) continue;
     assignments.push({ agent_slug: m[1], topic: m[2].trim() });
@@ -98,7 +97,9 @@ export async function generateIssue(
 ): Promise<string> {
   const sb = supabaseServer();
   const personas = await listPersonas();
-  const personaBySlug = new Map(personas.map((p) => [p.slug, p]));
+  const personaBySlug = new Map<string, Persona>(
+    personas.map((p) => [p.slug, p]),
+  );
 
   const plan = await planIssue(userId);
 

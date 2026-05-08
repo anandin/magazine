@@ -1,4 +1,4 @@
-import { anthropic, MODEL, WEB_SEARCH_TOOL } from "@/lib/anthropic";
+import { anthropic, MODEL, WEB_SEARCH_TOOLS } from "@/lib/anthropic";
 import {
   getPreferences,
   preferencesBlock,
@@ -92,13 +92,12 @@ Research the topic with web_search. Then file BOTH drafts: real first, then the 
     model: MODEL,
     max_tokens: 6000,
     system,
-    tools: [WEB_SEARCH_TOOL],
+    tools: WEB_SEARCH_TOOLS,
     messages: [{ role: "user", content: userPrompt }],
   });
 
   const text = response.content
-    .filter((b): b is { type: "text"; text: string } => b.type === "text")
-    .map((b) => b.text)
+    .flatMap((b) => (b.type === "text" ? [b.text] : []))
     .join("\n");
 
   return parsePiece(text);
