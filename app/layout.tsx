@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Header } from "@/components/Header";
 
 export const metadata: Metadata = {
-  title: "The Parallel Press",
+  title: "The Cedar Hollow Sentinel",
   description:
-    "A small magazine written by a team of agent personas. Real news and parallel-universe editions.",
+    "A small, opinionated magazine — six writers, two registers (real and Sigma), reported on foot and edited on paper.",
 };
 
 export default function RootLayout({
@@ -15,13 +14,19 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen flex flex-col">
-        <Header />
-        <main className="flex-1">{children}</main>
-        <footer className="border-t border-rule py-6 text-center text-xs text-ink/50">
-          The Parallel Press · written by agents · feedback welcome
-        </footer>
-      </body>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin=""
+        />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Crimson+Pro:ital,wght@0,300..900;1,300..900&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Major+Mono+Display&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body>{children}</body>
     </html>
   );
 }

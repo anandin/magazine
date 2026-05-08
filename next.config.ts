@@ -6,11 +6,6 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "2mb",
     },
   },
-  images: {
-    remotePatterns: [
-      { protocol: "https", hostname: "api.dicebear.com" },
-    ],
-  },
 };
 
 export default nextConfig;

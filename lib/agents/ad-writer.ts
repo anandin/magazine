@@ -1,81 +1,165 @@
 import { anthropic, MODEL_FAST } from "@/lib/anthropic";
-import { getPersona } from "@/lib/agents/personas";
 import { supabaseServer } from "@/lib/supabase/server";
-import type { Mode } from "@/lib/types";
 
-interface AdDraft {
-  advertiser: string;
-  copy: string;
-  cta: string;
-  size: "half" | "quarter" | "banner";
+interface DisplayDraft {
+  headline: string;
+  tagline: string;
+  body: string;
+  meta: string;
+}
+interface DisplayPair {
+  real: DisplayDraft;
+  parallel: DisplayDraft;
+}
+interface ClassifiedPair {
+  category: string;
+  real_body: string;
+  parallel_body: string;
 }
 
-const SIZES: AdDraft["size"][] = ["banner", "half", "quarter", "quarter"];
+const AD_DESK_PROMPT = `You are the Ad Desk for a small newspaper-style magazine. You write two registers of every ad: REAL (warm, neighborly, plausible local advertiser) and PARALLEL (the Sigma timeline — the same business, slightly off-kilter; "Joe's Diner-Mirrorside", "Calloway Books, Verso"). Voice stays warm even when the world bends.`;
 
-export async function writeAds(issueId: string, mode: Mode): Promise<void> {
-  const persona = await getPersona("ad-desk");
-  if (!persona) return;
+const DISPLAY_PROMPT = `Write 4 display ads for today's issue. Each ad needs both a REAL and a PARALLEL variant.
+
+OUTPUT FORMAT (strict): emit exactly this XML.
+
+<ads>
+<ad>
+<real>
+<headline>BUSINESS NAME (uppercase)</headline>
+<tagline>One witty line.</tagline>
+<body>1-2 sentence body.</body>
+<meta>Address · phone or detail</meta>
+</real>
+<parallel>
+<headline>BUSINESS NAME-MIRRORSIDE or Σ-variant</headline>
+<tagline>One witty line in the Sigma register.</tagline>
+<body>1-2 sentence body — same business, weirder world.</body>
+<meta>Address · the way it travels in the Sigma timeline</meta>
+</parallel>
+</ad>
+... 4 ads total ...
+</ads>`;
+
+const CLASSIFIEDS_PROMPT = `Write 4 classifieds for today's issue, one each in these categories: LOST & FOUND, LESSONS, YARD SALE, PERSONALS. Each classified gets both a REAL body and a PARALLEL body.
+
+OUTPUT FORMAT (strict):
+
+<classifieds>
+<entry category="LOST & FOUND">
+<real>Body of the real classified, a few short sentences. Plausible details.</real>
+<parallel>Body of the Sigma-timeline classified — same shape, slightly off-kilter.</parallel>
+</entry>
+<entry category="LESSONS">...</entry>
+<entry category="YARD SALE">...</entry>
+<entry category="PERSONALS">...</entry>
+</classifieds>`;
+
+export async function writeAds(issueId: string): Promise<void> {
   const sb = supabaseServer();
 
-  const flavor =
-    mode === "parallel"
-      ? "These ads run in a parallel-universe issue, so the advertisers can be slightly off-kilter (e.g. a hardware store that also rents owls), but the voice stays warm-neighborly."
-      : "These are real-feeling local ads — hardware store, dentist, library book sale, bakery, used bookstore, that sort of thing.";
+  const [displays, classifieds] = await Promise.all([
+    generateDisplay(),
+    generateClassifieds(),
+  ]);
 
-  const prompt = `Write 4 short local-newspaper-style ads for today's issue. ${flavor}
-
-OUTPUT FORMAT (strict): one <ad> block per ad, nothing else.
-<ad>
-<advertiser>Business name</advertiser>
-<size>banner|half|quarter</size>
-<copy>The ad copy. Under 40 words.</copy>
-<cta>Short call to action.</cta>
-</ad>`;
-
-  const response = await anthropic().messages.create({
-    model: MODEL_FAST,
-    max_tokens: 1024,
-    system: persona.system_prompt,
-    messages: [{ role: "user", content: prompt }],
+  const rows: Array<Record<string, unknown>> = [];
+  displays.forEach((ad, i) => {
+    rows.push({
+      issue_id: issueId,
+      kind: "display",
+      position: i,
+      real_headline: ad.real.headline,
+      real_tagline: ad.real.tagline,
+      real_body: ad.real.body,
+      real_meta: ad.real.meta,
+      parallel_headline: ad.parallel.headline,
+      parallel_tagline: ad.parallel.tagline,
+      parallel_body: ad.parallel.body,
+      parallel_meta: ad.parallel.meta,
+    });
   });
+  classifieds.forEach((c, i) => {
+    rows.push({
+      issue_id: issueId,
+      kind: "classified",
+      category: c.category,
+      position: i,
+      real_body: c.real_body,
+      parallel_body: c.parallel_body,
+    });
+  });
+  if (rows.length) await sb.from("ads").insert(rows);
+}
 
-  const text = response.content
+async function generateDisplay(): Promise<DisplayPair[]> {
+  const r = await anthropic().messages.create({
+    model: MODEL_FAST,
+    max_tokens: 1500,
+    system: AD_DESK_PROMPT,
+    messages: [{ role: "user", content: DISPLAY_PROMPT }],
+  });
+  const text = r.content
     .filter((b): b is { type: "text"; text: string } => b.type === "text")
     .map((b) => b.text)
     .join("\n");
-
-  const ads = parseAds(text);
-  if (!ads.length) return;
-  await sb.from("ads").insert(
-    ads.slice(0, SIZES.length).map((a, i) => ({
-      issue_id: issueId,
-      advertiser: a.advertiser,
-      copy: a.copy,
-      cta: a.cta,
-      size: a.size || SIZES[i],
-    })),
-  );
+  return parseDisplayAds(text);
 }
 
-function parseAds(raw: string): AdDraft[] {
-  const out: AdDraft[] = [];
+async function generateClassifieds(): Promise<ClassifiedPair[]> {
+  const r = await anthropic().messages.create({
+    model: MODEL_FAST,
+    max_tokens: 1200,
+    system: AD_DESK_PROMPT,
+    messages: [{ role: "user", content: CLASSIFIEDS_PROMPT }],
+  });
+  const text = r.content
+    .filter((b): b is { type: "text"; text: string } => b.type === "text")
+    .map((b) => b.text)
+    .join("\n");
+  return parseClassifieds(text);
+}
+
+function parseDisplayAds(raw: string): DisplayPair[] {
+  const out: DisplayPair[] = [];
   const re = /<ad>([\s\S]*?)<\/ad>/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(raw)) !== null) {
     const block = m[1];
-    const get = (tag: string) => {
-      const mm = block.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, "i"));
-      return mm ? mm[1].trim() : "";
-    };
-    const advertiser = get("advertiser");
-    const copy = get("copy");
-    if (!advertiser || !copy) continue;
-    const sizeRaw = get("size").toLowerCase();
-    const size: AdDraft["size"] =
-      sizeRaw === "banner" || sizeRaw === "half" || sizeRaw === "quarter"
-        ? sizeRaw
-        : "quarter";
-    out.push({ advertiser, copy, cta: get("cta"), size });
+    const real = pickDisplay(extract(block, "real"));
+    const parallel = pickDisplay(extract(block, "parallel"));
+    if (real.headline && parallel.headline) out.push({ real, parallel });
   }
   return out;
+}
+
+function parseClassifieds(raw: string): ClassifiedPair[] {
+  const out: ClassifiedPair[] = [];
+  const re =
+    /<entry\s+category="([^"]+)"\s*>([\s\S]*?)<\/entry>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(raw)) !== null) {
+    const cat = m[1].trim();
+    const block = m[2];
+    out.push({
+      category: cat,
+      real_body: extract(block, "real").trim(),
+      parallel_body: extract(block, "parallel").trim(),
+    });
+  }
+  return out;
+}
+
+function pickDisplay(block: string): DisplayDraft {
+  return {
+    headline: extract(block, "headline"),
+    tagline: extract(block, "tagline"),
+    body: extract(block, "body"),
+    meta: extract(block, "meta"),
+  };
+}
+
+function extract(block: string, name: string): string {
+  const mm = block.match(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`, "i"));
+  return mm ? mm[1].trim() : "";
 }

@@ -7,13 +7,16 @@ export const runtime = "nodejs";
 const Body = z.object({
   kind: z.enum(["article", "persona"]),
   target_id: z.string().uuid(),
-  liked: z.boolean().optional(),
-  rating: z.number().int().min(1).max(5).optional(),
+  // article-only:
+  mode: z.enum(["real", "parallel"]).optional(),
+  verdict: z.enum(["up", "down", "more"]).optional(),
   style_score: z.number().int().min(1).max(5).optional(),
   storytelling_score: z.number().int().min(1).max(5).optional(),
   format_score: z.number().int().min(1).max(5).optional(),
   content_score: z.number().int().min(1).max(5).optional(),
   relevance_score: z.number().int().min(1).max(5).optional(),
+  // persona-only:
+  rating: z.number().int().min(1).max(5).optional(),
   notes: z.string().max(2000).optional(),
 });
 
@@ -26,10 +29,17 @@ export async function POST(req: Request) {
   }
   const sb = supabaseServer();
   if (body.kind === "article") {
+    if (!body.mode) {
+      return NextResponse.json(
+        { error: "mode required for article feedback" },
+        { status: 400 },
+      );
+    }
     const { error } = await sb.from("article_feedback").insert({
       user_id: DEFAULT_USER_ID,
       article_id: body.target_id,
-      liked: body.liked,
+      mode: body.mode,
+      verdict: body.verdict,
       style_score: body.style_score,
       storytelling_score: body.storytelling_score,
       format_score: body.format_score,

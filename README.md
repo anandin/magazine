@@ -1,115 +1,108 @@
-# The Parallel Press
+# The Cedar Hollow Sentinel
 
-A small magazine — including local-newspaper-style ads — written by a team of agent personas. Two modes: **Real news** and **Parallel universe** (creative writeups grounded in actual events).
+A small magazine — including local-newspaper-style ads and classifieds — written by a team of six agent personas. Every story is filed in two registers: **Real news** (verifiably reported, web-searched, sourced) and **Sigma edition** (the parallel-universe draft of the same event, by the same writer). Toggle between them with the pill in the utility bar.
 
-## What's here
+## Features
 
-- **Reader UI** — cover, issue page with interleaved ads, full article view with author sidebar.
-- **Per-persona agents** — six writers (Politics, Tech, Culture, Sports, Business, Ads), each with a distinct voice and system prompt.
-- **Editor agent** — picks topics for each issue using web search, assigns one story per writer.
-- **Writer agent** — researches via Anthropic's hosted `web_search` tool, then files a 500-900 word article in its persona's voice. Real and parallel-universe modes use the same persona but different mode instructions.
-- **Per-article chat** — talk to the writer about their piece. The persona answers in character with full access to the article and research notes.
-- **Feedback loop** — per-article scores (style, storytelling, format, content, relevance) + free text. Feedback is loaded back into that persona's next prompt.
-- **Persona reviews** — review the writers themselves; star rating + notes.
-- **Preferences** — tell the team what sections you like, your style notes, your expectations, your default mode.
+- **Six personas** with distinct voices, beats, methods, and Sigma-handles — Margaret Voss (Politics), Kenji Nakamura (Tech), Lila Okafor (Culture), Dr. Reuben Ash (Science), Theo Marigold (Sports), Vera Solanke (Opinion). Hand-drawn duotone portrait avatars.
+- **Editor agent** scans the wire each run via Anthropic's hosted `web_search` and assigns one story per writer.
+- **Writer agent** drafts BOTH variants of each piece in a single call — same researched event, two timelines.
+- **Reading trail sidebar** on every article — the writer's method + the actual sources, sticky as you scroll.
+- **Per-article chat** — the persona answers in character with full access to the article and research notes. Mode-aware (Sigma chats use the parallel handle).
+- **Feedback** — five dimensions (style, storytelling, format, content, relevance), three verdicts (worth it / skip / more like this), free-text note. Stored per-mode and folded back into that writer's next prompt.
+- **Masthead modal** — review the writers themselves; star ratings + tap-to-talk.
+- **My Edition drawer** — name, city, topics, tone, length, visual weight, reading level, local priority slider, banned topics, expectations.
+- **Display ads** + **classifieds** (LOST & FOUND, LESSONS, YARD SALE, PERSONALS), each with paired real/Sigma copy.
+- **Twice-daily auto-generation** via Vercel Cron (7am ET / 7pm ET in EDT).
 
 ## Stack
 
-- Next.js 15 (App Router) + TypeScript + Tailwind
-- Supabase (Postgres) for issues, articles, ads, chat, feedback, preferences
-- Anthropic SDK with the hosted `web_search` tool — Opus 4.7 for article writing, Sonnet 4.6 for editor + chat + ads
+- Next.js 15 (App Router) + TypeScript, no Tailwind — a single hand-written stylesheet matching the design (Playfair Display + Crimson Pro + Inter + IBM Plex Mono + Major Mono Display).
+- Supabase (Postgres) for personas, issues, articles (paired variants), ads, chat, feedback, preferences.
+- Anthropic SDK — Opus 4.7 for article writing, Sonnet 4.6 for editor / chat / ads. Hosted `web_search` tool for grounding.
 
 ## Setup
 
-1. Install:
-   ```bash
-   npm install
-   ```
-2. Create a Supabase project. In the SQL editor, run:
-   ```
-   supabase/migrations/0001_init.sql
-   ```
-   This creates the schema and seeds the six personas.
-3. Copy env:
-   ```bash
-   cp .env.example .env.local
-   ```
-   Fill in `ANTHROPIC_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
-4. Dev:
-   ```bash
-   npm run dev
-   ```
-5. Open `http://localhost:3000`. Pick a mode and click **Generate issue**. The team takes 1-3 minutes to research and file.
+1. `npm install`
+2. Create a Supabase project. In the SQL editor, run `supabase/migrations/0001_init.sql`. This creates the schema and seeds the six writers.
+3. `cp .env.example .env.local` and fill in:
+   - `ANTHROPIC_API_KEY`
+   - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+   - `CRON_SECRET` (`openssl rand -hex 32`) — required if you deploy with Vercel Cron
+4. `npm run dev` and open `http://localhost:3000`. First load: the welcome drawer asks you to set your edition; then **Commission today's issue** kicks off the team.
+
+## Twice-daily auto-generation
+
+`vercel.json` schedules `/api/cron/generate` at **11:00 UTC** and **23:00 UTC** — that's 7am / 7pm America/New_York during EDT (6am / 6pm during EST).
+
+The route is auth-gated by `CRON_SECRET` and idempotent within a 4-hour window so retries can't double-publish. The 12-hour gap between the two crons cleanly admits one issue each.
+
+To trigger one manually:
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" "$BASE_URL/api/cron/generate"
+```
 
 ## Generate-issue flow
 
-`POST /api/issues/generate { mode }`
+1. Editor agent calls `web_search` to scan recent news, then assigns one story per writer based on reader prefs.
+2. Each writer agent runs in parallel: `web_search` → drafts BOTH the real and the Sigma version of the same story in one call (single XML response).
+3. Ad Desk agent writes 4 display ads + 4 classifieds, each in both registers.
+4. Issue is marked published. The reader's `/` route shows the latest published issue; the toggle flips registers without a network call (both variants are already in the DB).
 
-1. Editor agent calls `web_search` to scan recent news, then assigns one topic per writer.
-2. Each writer agent runs in parallel: web-searches its topic, then drafts an article with citations.
-3. Ad Desk writes 4 local-paper-style ads.
-4. The issue is marked published.
-
-## Where things live
+## File layout
 
 ```
 app/
-  page.tsx                       # cover, recent issues, mode toggle + generate button
-  issue/[id]/page.tsx            # full issue: articles + interleaved ads
-  article/[id]/page.tsx          # article + persona sidebar + chat + feedback
-  preferences/                   # reader preferences page
-  personas/                      # team browser + per-persona pages with reviews
+  page.tsx                       # latest issue (or EmptyPress onboarding)
+  layout.tsx
+  globals.css                    # the full magazine stylesheet
   api/
-    issues/generate/route.ts     # kick off issue generation
+    issues/generate/route.ts     # manual generation
     issues/[id]/route.ts         # fetch issue
-    articles/[id]/chat/route.ts  # chat with the persona
-    feedback/route.ts            # article + persona feedback
-    preferences/route.ts         # GET/POST preferences
-    personas/route.ts            # list personas
+    cron/generate/route.ts       # twice-daily cron, gated by CRON_SECRET
+    articles/[id]/chat/route.ts  # chat with the persona (mode-aware)
+    feedback/route.ts            # article (mode-tagged) + persona feedback
+    preferences/route.ts         # GET/POST My Edition
+    personas/route.ts
+components/
+  MagazineApp.tsx                # client orchestrator: mode flip, modals, layout
+  EmptyPress.tsx                 # cover-style onboarding when no issue exists
+  Cover.tsx                      # masthead, vol/no, lead headline, cover art
+  CoverArt.tsx                   # hand-drawn duotone SVG (real + Sigma)
+  Article.tsx                    # kicker · headline · dek · byline · body · research · feedback
+  Byline.tsx
+  ResearchNote.tsx               # method + sources sidebar
+  FeedbackBlock.tsx              # 5 dimensions + 3 verdicts + comment
+  DisplayAd.tsx
+  Classifieds.tsx
+  Colophon.tsx
+  AgentAvatar.tsx                # SVG portraits, paper-grain pattern
+  ChatModal.tsx                  # bottom-sheet chat with starter prompts
+  PrefsDrawer.tsx                # My Edition (onboarding + ongoing)
+  MastheadModal.tsx              # masthead grid with rate-this-writer
+  UtilityBar.tsx                 # sticky top: Masthead · mode toggle · stamp
 lib/
   agents/
-    personas.ts                  # CRUD for personas
+    personas.ts                  # CRUD for writers
     editor.ts                    # plans + assembles an issue
-    writer.ts                    # writes one article (real or parallel)
-    chat.ts                      # talks to a persona about its article
-    ad-writer.ts                 # writes ads
-  anthropic.ts                   # Anthropic client + web_search tool config
-  personalize.ts                 # loads prefs + recent feedback into prompts
+    writer.ts                    # writes BOTH variants in one call
+    chat.ts                      # in-character chat (mode-aware)
+    ad-writer.ts                 # display ads + classifieds (both registers)
+  anthropic.ts                   # client + web_search tool config
+  personalize.ts                 # prefs + recent feedback into prompts
   supabase/{server,client}.ts
   types.ts
-components/                      # Header, PersonaAvatar, PersonaCard, AdSlot,
-                                 # ModeToggle, ChatPanel, FeedbackWidget, Article
 supabase/migrations/0001_init.sql
+vercel.json                      # twice-daily cron
 ```
 
-## Twice-daily auto-generation (Vercel Cron)
+## What's stubbed (v1)
 
-`vercel.json` schedules `/api/cron/generate?mode=real` at **11:00 UTC** and **23:00 UTC** — that's 7am / 7pm America/New_York during EDT (6am / 6pm during EST).
-
-To enable on Vercel:
-
-1. Set `CRON_SECRET` in the project's env vars (any long random string — `openssl rand -hex 32`).
-2. Deploy. Vercel will start firing the cron automatically and pass `Authorization: Bearer $CRON_SECRET` to the route.
-3. The route is idempotent: if a real-mode issue was already created in the last 4 hours, it skips — so retries on transient failures don't double up.
-
-To trigger one manually (locally or against a deploy):
-```bash
-curl -H "Authorization: Bearer $CRON_SECRET" "$BASE_URL/api/cron/generate?mode=real"
-```
-
-To swap one of the runs to parallel-universe mode, edit `vercel.json` and change `mode=real` to `mode=parallel`.
-
-## Single-user mode
-
-v1 uses a fixed `DEFAULT_USER_ID` for preferences and feedback. Before going multi-user, swap in Supabase Auth and replace `DEFAULT_USER_ID` references with the authenticated user's id.
-
-## What's stubbed
-
-- **Avatars** are static SVGs from DiceBear keyed off the persona name. Animated/voice avatars are a v2.
-- **Auth** — single-user, no sessions.
-- **No image generation** for cover art or article art. Easy to add: an `image_url` column on `articles`/`issues` and a generation step in the editor.
-- **No moderation** — agents are trusted to follow their prompts. Add an output filter if you expose this publicly.
+- **Auth** — single-user mode with a fixed `DEFAULT_USER_ID`. Add Supabase Auth before going public.
+- **Image generation** — no per-article art yet; the cover SVG is hand-drawn.
+- **Animated/voice avatars** — the design is text-only; the SVG portraits are static.
+- **Tweaks panel** (density / show-ads / show-research) from the original design isn't ported; can be added back as a CSS-only overlay if useful.
 
 ## Costs
 
-Each issue is ~6 model calls (1 editor + ~5 writers + 1 ad desk), each with web_search. Expect ~$0.50–$2 per issue depending on how much the writers search. Switch `MODEL` in `lib/anthropic.ts` to `MODEL_FAST` (Sonnet) to drop that ~5×.
+Per issue: ~6 writer calls (Opus 4.7, each with `web_search`) + 1 editor call (Sonnet) + 1 ad call (Sonnet) + 1 classifieds call (Sonnet). Roughly **$1–$3 per issue** depending on how aggressively the writers search. Twice a day = $2–$6/day. Drop `MODEL` in `lib/anthropic.ts` to `MODEL_FAST` to cut writing cost by ~5×.

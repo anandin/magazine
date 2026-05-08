@@ -4,103 +4,185 @@ import {
   preferencesBlock,
   recentFeedbackForPersona,
 } from "@/lib/personalize";
-import type { Mode, Persona, Source } from "@/lib/types";
+import type {
+  ArticleVariant,
+  Mode,
+  Persona,
+  Source,
+} from "@/lib/types";
 
 interface WriteArgs {
   persona: Persona;
   topic: string;
-  mode: Mode;
   userId: string;
 }
 
-interface WrittenArticle {
-  headline: string;
-  dek: string;
-  body_md: string;
-  sources: Source[];
-  research_notes: string;
+export interface WrittenArticle {
+  real: ArticleVariant;
+  parallel: ArticleVariant;
 }
 
-const REAL_MODE_INSTRUCTION = `MODE: REAL NEWS.
-Report what is verifiably true. Use web_search to gather sources. Cite sources inline as [1], [2] referring to the sources list. Do not invent quotes or facts. If a claim cannot be sourced, omit or hedge it.`;
+const REGISTER_INSTRUCTION = `You will produce TWO drafts of the same story:
 
-const PARALLEL_MODE_INSTRUCTION = `MODE: PARALLEL UNIVERSE.
-Start from the actual events you found via web_search. Then deliberately diverge: pick one plausible alternative — a decision that went the other way, a person who showed up where they didn't, a system that worked differently — and report the consequences as if you were a journalist in that timeline. Keep the prose grounded; the speculation lives in the premise, not the prose. Note the divergence point in the dek. Sources should still cite the real-world events you built from.`;
+  REAL — verifiably true. Use web_search. Cite sources you actually found, with real URLs.
+  PARALLEL (Sigma edition) — start from the same reported events, then deliberately diverge: pick one plausible alternative (a vote that went the other way, a body that doesn't exist in our world, a system that worked differently) and report the consequences as if you were a journalist in that timeline. Sign as "{parallel_handle}" in your byline. Keep the prose grounded; the speculation lives in the premise, not the language. Cite the same real-world sources you used to ground the divergence.
 
-const OUTPUT_INSTRUCTION = `OUTPUT FORMAT (strict): Output exactly these XML tags, in order, nothing else after the closing </article> tag:
-<article>
-<research_notes>2-4 sentences of your private notes — what you learned, what surprised you, what you decided to focus on.</research_notes>
-<headline>The headline. No quotes around it.</headline>
-<dek>One-sentence subhead under the headline.</dek>
+Both drafts should be in the same writer's voice and the same approximate length.`;
+
+const OUTPUT_INSTRUCTION = `OUTPUT FORMAT (strict): emit exactly this XML, nothing else after the closing </piece> tag.
+
+<piece>
+<real>
+<kicker>SHORT ALL-CAPS KICKER · LOCATION</kicker>
+<headline>One sharp headline. No quotes around it.</headline>
+<dek>One-sentence subhead.</dek>
 <body>
-The full article body in markdown. 500-900 words. Use ## for section breaks if needed. Cite sources inline as [1], [2] etc.
+A paragraph.
+||
+Another paragraph.
+||
+Another paragraph.
 </body>
+<research_notes>2-4 sentences of your private notes — what you found, what surprised you, what you cut.</research_notes>
 <sources>
-1. Title — https://url
-2. Title — https://url
+1. Source title — https://url
+2. Source title — https://url
 </sources>
-</article>`;
+</real>
+<parallel>
+<kicker>SHORT ALL-CAPS KICKER · LOCATION</kicker>
+<headline>Headline in the Sigma timeline.</headline>
+<dek>One-sentence subhead naming the divergence point.</dek>
+<body>
+Paragraph.
+||
+Paragraph.
+</body>
+<research_notes>2-4 sentences of your notes about the divergence and what stayed real.</research_notes>
+<sources>
+1. Real-world anchor — https://url
+</sources>
+</parallel>
+</piece>`;
 
 export async function writeArticle(args: WriteArgs): Promise<WrittenArticle> {
-  const { persona, topic, mode, userId } = args;
+  const { persona, topic, userId } = args;
   const prefs = await getPreferences(userId);
   const feedback = await recentFeedbackForPersona(persona.id, userId);
 
   const system = [
     persona.system_prompt,
     "",
-    mode === "real" ? REAL_MODE_INSTRUCTION : PARALLEL_MODE_INSTRUCTION,
+    `Your beat: ${persona.beat}. Your voice: ${persona.voice}.`,
+    `When filing the parallel draft, sign as: ${persona.parallel_handle}.`,
+    `Your method: ${persona.method}.`,
+    "",
+    REGISTER_INSTRUCTION.replace("{parallel_handle}", persona.parallel_handle),
     "",
     preferencesBlock(prefs, feedback),
     "",
     OUTPUT_INSTRUCTION,
   ].join("\n");
 
-  const userPrompt = `Topic for your ${persona.section} piece: ${topic}
+  const userPrompt = `Today's assignment, ${persona.name}: ${topic}
 
-Research the topic using web_search before writing. Then write the article in your voice.`;
+Research the topic with web_search. Then file BOTH drafts: real first, then the Sigma-timeline version of the same story.`;
 
   const response = await anthropic().messages.create({
     model: MODEL,
-    max_tokens: 4096,
+    max_tokens: 6000,
     system,
     tools: [WEB_SEARCH_TOOL],
     messages: [{ role: "user", content: userPrompt }],
   });
 
   const text = response.content
-    .filter((block): block is { type: "text"; text: string } => block.type === "text")
+    .filter((b): b is { type: "text"; text: string } => b.type === "text")
     .map((b) => b.text)
     .join("\n");
 
-  return parseArticle(text);
+  return parsePiece(text);
 }
 
-function parseArticle(raw: string): WrittenArticle {
-  const get = (tag: string) => {
-    const m = raw.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, "i"));
-    return m ? m[1].trim() : "";
-  };
-  const research_notes = get("research_notes");
-  const headline = get("headline").replace(/^["']|["']$/g, "");
-  const dek = get("dek");
-  const body_md = get("body");
-  const sourcesBlock = get("sources");
-  const sources: Source[] = [];
-  for (const line of sourcesBlock.split(/\n/)) {
+function tag(raw: string, name: string): string {
+  const m = raw.match(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`, "i"));
+  return m ? m[1].trim() : "";
+}
+
+function parseSources(block: string): Source[] {
+  const out: Source[] = [];
+  for (const line of block.split(/\n/)) {
     const m = line.match(/^\s*\d+\.\s*(.+?)\s+[—–-]\s+(https?:\/\/\S+)/);
-    if (m) sources.push({ title: m[1].trim(), url: m[2].trim() });
+    if (m) out.push({ title: m[1].trim(), url: m[2].trim() });
   }
-  if (!headline || !body_md) {
-    // Fallback: return whatever we got so we don't lose work; surface raw text as body.
+  return out;
+}
+
+function parseBody(block: string): string[] {
+  return block
+    .split(/\n*\|\|\n*/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+}
+
+function parseVariant(block: string): ArticleVariant {
+  return {
+    kicker: tag(block, "kicker"),
+    headline: tag(block, "headline").replace(/^["']|["']$/g, ""),
+    dek: tag(block, "dek"),
+    body: parseBody(tag(block, "body")),
+    sources: parseSources(tag(block, "sources")),
+    research_notes: tag(block, "research_notes"),
+  };
+}
+
+function parsePiece(raw: string): WrittenArticle {
+  const real = tag(raw, "real");
+  const parallel = tag(raw, "parallel");
+  const realV = parseVariant(real);
+  const parallelV = parseVariant(parallel);
+  // Defensive fallbacks so a malformed variant doesn't sink the whole issue.
+  if (!realV.headline) realV.headline = "Untitled";
+  if (!parallelV.headline)
+    parallelV.headline = realV.headline + " (Sigma timeline)";
+  if (realV.body.length === 0) realV.body = [raw];
+  if (parallelV.body.length === 0) parallelV.body = realV.body.slice(0, 2);
+  return { real: realV, parallel: parallelV };
+}
+
+export function variantOf(
+  article: {
+    real_kicker: string | null;
+    real_headline: string;
+    real_dek: string | null;
+    real_body: string[];
+    real_sources: Source[];
+    real_research_notes: string;
+    parallel_kicker: string | null;
+    parallel_headline: string;
+    parallel_dek: string | null;
+    parallel_body: string[];
+    parallel_sources: Source[];
+    parallel_research_notes: string;
+  },
+  mode: Mode,
+): ArticleVariant {
+  if (mode === "real") {
     return {
-      research_notes: research_notes || "(parser fallback)",
-      headline: headline || "Untitled",
-      dek: dek || "",
-      body_md: body_md || raw,
-      sources,
+      kicker: article.real_kicker ?? "",
+      headline: article.real_headline,
+      dek: article.real_dek ?? "",
+      body: article.real_body ?? [],
+      sources: article.real_sources ?? [],
+      research_notes: article.real_research_notes ?? "",
     };
   }
-  return { research_notes, headline, dek, body_md, sources };
+  return {
+    kicker: article.parallel_kicker ?? "",
+    headline: article.parallel_headline,
+    dek: article.parallel_dek ?? "",
+    body: article.parallel_body ?? [],
+    sources: article.parallel_sources ?? [],
+    research_notes: article.parallel_research_notes ?? "",
+  };
 }
-

@@ -1,22 +1,29 @@
 export type Mode = "real" | "parallel";
 
-export type PersonaSlug =
-  | "mara-okafor"
-  | "june-takeda"
-  | "rafa-mendes"
-  | "kennedy-park"
-  | "sal-romero"
-  | "ad-desk";
+export type AgentSlug =
+  | "voss"
+  | "kenji"
+  | "okafor"
+  | "ash"
+  | "marigold"
+  | "solanke";
 
 export interface Persona {
   id: string;
-  slug: PersonaSlug;
+  slug: AgentSlug;
   name: string;
-  section: string;
+  beat: string;
+  initials: string;
+  color: string;
+  portrait_tone: string;
+  years_on_beat: number;
   bio: string;
   voice: string;
+  method: string;
+  parallel_handle: string;
+  parallel_bio: string;
+  sources_template: string[];
   system_prompt: string;
-  avatar_url: string | null;
 }
 
 export interface Source {
@@ -24,24 +31,43 @@ export interface Source {
   url: string;
 }
 
+export interface ArticleVariant {
+  kicker: string;
+  headline: string;
+  dek: string;
+  body: string[];
+  sources: Source[];
+  research_notes: string;
+}
+
 export interface Article {
   id: string;
   issue_id: string;
-  persona_id: string;
-  mode: Mode;
+  agent_id: string;
   section: string;
-  headline: string;
-  dek: string | null;
-  body_md: string;
-  research_notes: string | null;
-  sources: Source[];
+  position: number;
+
+  real_kicker: string | null;
+  real_headline: string;
+  real_dek: string | null;
+  real_body: string[];
+  real_sources: Source[];
+  real_research_notes: string;
+
+  parallel_kicker: string | null;
+  parallel_headline: string;
+  parallel_dek: string | null;
+  parallel_body: string[];
+  parallel_sources: Source[];
+  parallel_research_notes: string;
+
   created_at: string;
 }
 
 export interface Issue {
   id: string;
   user_id: string;
-  mode: Mode;
+  issue_number: number;
   title: string;
   cover_blurb: string | null;
   status: "draft" | "published";
@@ -52,35 +78,43 @@ export interface Issue {
 export interface Ad {
   id: string;
   issue_id: string;
-  advertiser: string;
-  copy: string;
-  cta: string | null;
-  size: "half" | "quarter" | "banner";
+  kind: "display" | "classified";
+  category: string | null;
+  position: number;
+
+  real_headline: string | null;
+  real_tagline: string | null;
+  real_body: string;
+  real_meta: string | null;
+
+  parallel_headline: string | null;
+  parallel_tagline: string | null;
+  parallel_body: string;
+  parallel_meta: string | null;
 }
 
 export interface Preferences {
   user_id: string;
-  preferred_sections: string[];
-  style_notes: string;
+  name: string;
+  city: string;
+  topics: string[];
+  tone: "as-written" | "dry" | "witty" | "deep-dive" | "snappy";
+  length: "short" | "medium" | "long";
+  visual_weight: "text-heavy" | "balanced" | "image-heavy";
+  reading_level: "skim" | "engaged-adult" | "wonk";
+  local_priority: number;
+  banned: string[];
   expectations: string;
   default_mode: Mode;
+  onboarded: boolean;
 }
 
 export interface ChatMessage {
   id: string;
   user_id: string;
   article_id: string;
+  mode: Mode;
   role: "user" | "assistant";
   content: string;
   created_at: string;
-}
-
-export interface ArticleFeedback {
-  liked?: boolean;
-  style_score?: number;
-  storytelling_score?: number;
-  format_score?: number;
-  content_score?: number;
-  relevance_score?: number;
-  notes?: string;
 }

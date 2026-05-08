@@ -7,6 +7,7 @@ export const maxDuration = 60;
 
 const Body = z.object({
   message: z.string().min(1).max(4000),
+  mode: z.enum(["real", "parallel"]),
 });
 
 export async function POST(
@@ -23,9 +24,13 @@ export async function POST(
   try {
     const { reply, persona } = await chatWithPersona({
       articleId: id,
+      mode: body.mode,
       userMessage: body.message,
     });
-    return NextResponse.json({ reply, persona: { name: persona.name, slug: persona.slug } });
+    return NextResponse.json({
+      reply,
+      persona: { name: persona.name, slug: persona.slug },
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "unknown error";
     return NextResponse.json({ error: msg }, { status: 500 });

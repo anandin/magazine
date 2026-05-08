@@ -11,8 +11,16 @@ export async function GET(
   const sb = supabaseServer();
   const [{ data: issue }, { data: articles }, { data: ads }] = await Promise.all([
     sb.from("issues").select("*").eq("id", id).maybeSingle(),
-    sb.from("articles").select("*, personas(*)").eq("issue_id", id),
-    sb.from("ads").select("*").eq("issue_id", id),
+    sb
+      .from("articles")
+      .select("*")
+      .eq("issue_id", id)
+      .order("position", { ascending: true }),
+    sb
+      .from("ads")
+      .select("*")
+      .eq("issue_id", id)
+      .order("position", { ascending: true }),
   ]);
   if (!issue) return NextResponse.json({ error: "not found" }, { status: 404 });
   return NextResponse.json({ issue, articles: articles ?? [], ads: ads ?? [] });
