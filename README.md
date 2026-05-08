@@ -82,6 +82,23 @@ components/                      # Header, PersonaAvatar, PersonaCard, AdSlot,
 supabase/migrations/0001_init.sql
 ```
 
+## Twice-daily auto-generation (Vercel Cron)
+
+`vercel.json` schedules `/api/cron/generate?mode=real` at **11:00 UTC** and **23:00 UTC** — that's 7am / 7pm America/New_York during EDT (6am / 6pm during EST).
+
+To enable on Vercel:
+
+1. Set `CRON_SECRET` in the project's env vars (any long random string — `openssl rand -hex 32`).
+2. Deploy. Vercel will start firing the cron automatically and pass `Authorization: Bearer $CRON_SECRET` to the route.
+3. The route is idempotent: if a real-mode issue was already created in the last 4 hours, it skips — so retries on transient failures don't double up.
+
+To trigger one manually (locally or against a deploy):
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" "$BASE_URL/api/cron/generate?mode=real"
+```
+
+To swap one of the runs to parallel-universe mode, edit `vercel.json` and change `mode=real` to `mode=parallel`.
+
 ## Single-user mode
 
 v1 uses a fixed `DEFAULT_USER_ID` for preferences and feedback. Before going multi-user, swap in Supabase Auth and replace `DEFAULT_USER_ID` references with the authenticated user's id.

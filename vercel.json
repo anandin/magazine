@@ -1,0 +1,6 @@
+{
+  "crons": [
+    { "path": "/api/cron/generate?mode=real", "schedule": "0 11 * * *" },
+    { "path": "/api/cron/generate?mode=real", "schedule": "0 23 * * *" }
+  ]
+}
