@@ -24,6 +24,11 @@ export interface Persona {
   parallel_bio: string;
   sources_template: string[];
   system_prompt: string;
+  voice_sample: string;
+  structural_rules: string;
+  model_id: string;
+  temperature: number;
+  top_p: number;
 }
 
 export interface Source {

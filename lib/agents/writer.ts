@@ -1,4 +1,4 @@
-import { anthropic, MODEL, WEB_SEARCH_TOOLS } from "@/lib/anthropic";
+import { anthropic, WEB_SEARCH_TOOLS } from "@/lib/anthropic";
 import {
   getPreferences,
   preferencesBlock,
@@ -22,26 +22,26 @@ export interface WrittenArticle {
   parallel: ArticleVariant;
 }
 
-const REGISTER_INSTRUCTION = `You will produce TWO drafts of the same story:
+const REGISTER_INSTRUCTION = `You will produce TWO drafts of the same story.
 
   REAL — verifiably true. Use web_search. Cite sources you actually found, with real URLs.
-  PARALLEL (Sigma edition) — start from the same reported events, then deliberately diverge: pick one plausible alternative (a vote that went the other way, a body that doesn't exist in our world, a system that worked differently) and report the consequences as if you were a journalist in that timeline. Sign as "{parallel_handle}" in your byline. Keep the prose grounded; the speculation lives in the premise, not the language. Cite the same real-world sources you used to ground the divergence.
+  PARALLEL (Sigma edition) — start from the same reported events, then deliberately diverge: pick one plausible alternative (a vote that went the other way, a body that doesn't exist in our world, a system that worked differently) and report the consequences as if you were a journalist in that timeline. Sign as "{parallel_handle}". Keep the prose grounded; the speculation lives in the premise, not the language.
 
-Both drafts should be in the same writer's voice and the same approximate length.`;
+CRITICAL: both drafts must read like YOUR specific writing — not generic-magazine prose. Your voice anchor and structural rules below are non-negotiable. They override any habit toward smooth, balanced, "well-written" copy. Specificity over polish.`;
 
 const OUTPUT_INSTRUCTION = `OUTPUT FORMAT (strict): emit exactly this XML, nothing else after the closing </piece> tag.
 
 <piece>
 <real>
 <kicker>SHORT ALL-CAPS KICKER · LOCATION</kicker>
-<headline>One sharp headline. No quotes around it.</headline>
+<headline>One headline in your specific voice.</headline>
 <dek>One-sentence subhead.</dek>
 <body>
-A paragraph.
+Paragraph.
 ||
-Another paragraph.
+Paragraph.
 ||
-Another paragraph.
+Paragraph.
 </body>
 <research_notes>2-4 sentences of your private notes — what you found, what surprised you, what you cut.</research_notes>
 <sources>
@@ -51,7 +51,7 @@ Another paragraph.
 </real>
 <parallel>
 <kicker>SHORT ALL-CAPS KICKER · LOCATION</kicker>
-<headline>Headline in the Sigma timeline.</headline>
+<headline>Headline in your voice, in the Sigma timeline.</headline>
 <dek>One-sentence subhead naming the divergence point.</dek>
 <body>
 Paragraph.
@@ -73,24 +73,34 @@ export async function writeArticle(args: WriteArgs): Promise<WrittenArticle> {
   const system = [
     persona.system_prompt,
     "",
-    `Your beat: ${persona.beat}. Your voice: ${persona.voice}.`,
+    `Your beat: ${persona.beat}. Your method: ${persona.method}.`,
     `When filing the parallel draft, sign as: ${persona.parallel_handle}.`,
-    `Your method: ${persona.method}.`,
+    "",
+    persona.voice_sample || "",
+    "",
+    persona.structural_rules || "",
     "",
     REGISTER_INSTRUCTION.replace("{parallel_handle}", persona.parallel_handle),
     "",
     preferencesBlock(prefs, feedback),
     "",
     OUTPUT_INSTRUCTION,
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   const userPrompt = `Today's assignment, ${persona.name}: ${topic}
 
-Research the topic with web_search. Then file BOTH drafts: real first, then the Sigma-timeline version of the same story.`;
+Research the topic with web_search. Then file BOTH drafts in YOUR voice — not the magazine's house voice, yours. Re-read the structural rules before you start the second paragraph of each draft. Cut anything that sounds like it could have been written by another reporter on this masthead.`;
 
+  // Per-writer model + sampling parameters. Voss runs cold on Opus; Marigold
+  // runs hot on Haiku; Okafor is loose on Opus; etc. The whole point is that
+  // these dimensions vary so the prose varies.
   const response = await anthropic().messages.create({
-    model: MODEL,
+    model: persona.model_id || "claude-opus-4-7",
     max_tokens: 6000,
+    temperature: persona.temperature ?? 0.7,
+    top_p: persona.top_p ?? 1.0,
     system,
     tools: WEB_SEARCH_TOOLS,
     messages: [{ role: "user", content: userPrompt }],
