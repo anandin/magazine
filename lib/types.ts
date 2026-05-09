@@ -96,6 +96,11 @@ export interface Ad {
   parallel_tagline: string | null;
   parallel_body: string;
   parallel_meta: string | null;
+
+  source_kind: "ai" | "reddit" | "craigslist";
+  source_url: string | null;
+  source_author: string | null;
+  source_subreddit: string | null;
 }
 
 export interface Preferences {

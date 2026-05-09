@@ -879,3 +879,19 @@ html[data-density="airy"] .mag-article-body { font-size: 19px; line-height: 1.75
   .mag-util-inner { grid-template-columns: auto 1fr auto; padding: 8px 12px; }
   .mag-util-right { display: none; }
 }
+
+/* ── Classified attribution (via Reddit) ────────────────────────────────── */
+.mag-classifieds-attr {
+  display: inline-block;
+  margin-left: 4px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: .04em;
+  color: var(--ink-mute);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--ink-mute);
+}
+.mag-classifieds-attr:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}

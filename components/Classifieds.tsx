@@ -35,6 +35,22 @@ export function Classifieds({ ads, mode }: { ads: Ad[]; mode: Mode }) {
             {list.map((a) => (
               <p key={a.id} className="mag-classifieds-entry">
                 {parallel ? a.parallel_body : a.real_body}
+                {a.source_kind === "reddit" && a.source_url && !parallel && (
+                  <>
+                    {" "}
+                    <a
+                      href={a.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mag-classifieds-attr"
+                    >
+                      via r/{a.source_subreddit}
+                      {a.source_author && a.source_author !== "[deleted]"
+                        ? ` · u/${a.source_author}`
+                        : ""}
+                    </a>
+                  </>
+                )}
               </p>
             ))}
           </div>
