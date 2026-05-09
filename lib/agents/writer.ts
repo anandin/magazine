@@ -94,23 +94,26 @@ export async function writeArticle(args: WriteArgs): Promise<WrittenArticle> {
 Research the topic with web_search. Then file BOTH drafts in YOUR voice — not the magazine's house voice, yours. Re-read the structural rules before you start the second paragraph of each draft. Cut anything that sounds like it could have been written by another reporter on this masthead.`;
 
   // Per-writer model + sampling parameters. Voss runs cold on Opus; Marigold
-  // runs hot on Haiku; Okafor is loose on Opus; etc. The whole point is that
-  // these dimensions vary so the prose varies.
+  // runs hot on Haiku; Okafor is loose on Opus; etc.
   //
-  // Opus 4.7 has deprecated `temperature`, so for that model we vary only via
-  // top_p and the structural rules. Sonnet/Haiku still take both.
+  // Anthropic constraints: Opus 4.7 doesn't accept `temperature` (only top_p).
+  // Sonnet/Haiku reject having both `temperature` and `top_p` set together.
+  // So we pick exactly one knob per writer:
+  //   Opus  → top_p
+  //   other → temperature
   const model = persona.model_id || "claude-opus-4-7";
-  const supportsTemperature = !/opus-4-7/i.test(model);
+  const isOpus = /opus/i.test(model);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const params: any = {
     model,
     max_tokens: 6000,
-    top_p: persona.top_p ?? 1.0,
     system,
     tools: WEB_SEARCH_TOOLS,
     messages: [{ role: "user", content: userPrompt }],
   };
-  if (supportsTemperature) {
+  if (isOpus) {
+    params.top_p = persona.top_p ?? 0.95;
+  } else {
     params.temperature = persona.temperature ?? 0.7;
   }
   const response = await anthropic().messages.create(params);
