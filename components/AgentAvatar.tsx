@@ -12,8 +12,20 @@ interface Props {
   title?: string;
 }
 
-// Hand-built portrait: tinted bust on a paper background. Initials shown when
-// label=true (used in the masthead grid).
+// Slugs that have a photoreal portrait under /public/agents/{slug}.png.
+// Anything not in this set falls back to the hand-drawn SVG bust.
+const PHOTO_SLUGS = new Set([
+  "voss",
+  "kenji",
+  "okafor",
+  "ash",
+  "marigold",
+  "solanke",
+]);
+
+// Hand-built portrait: tinted bust on a paper background. When a photoreal
+// portrait exists for this writer, we render that instead and apply a subtle
+// duotone shift in parallel mode to keep the Sigma palette.
 export function AgentAvatar({
   agent,
   size = 56,
@@ -25,6 +37,7 @@ export function AgentAvatar({
 }: Props) {
   const tone = parallel ? shiftToneParallel(agent.portrait_tone) : agent.portrait_tone;
   const ink = parallel ? "#1a1326" : "#1a1612";
+  const hasPhoto = PHOTO_SLUGS.has(agent.slug);
   return (
     <button
       type="button"
@@ -47,37 +60,57 @@ export function AgentAvatar({
         flex: "0 0 auto",
       }}
     >
-      <svg viewBox="0 0 56 56" width={size} height={size} aria-hidden="true">
-        <defs>
-          <radialGradient
-            id={`g-${agent.slug}-${parallel ? "p" : "r"}`}
-            cx="50%"
-            cy="40%"
-            r="60%"
-          >
-            <stop offset="0%" stopColor={lighten(tone, 0.18)} />
-            <stop offset="100%" stopColor={tone} />
-          </radialGradient>
-        </defs>
-        <path
-          d="M -2 60 Q 8 42 28 42 Q 48 42 58 60 Z"
-          fill={agent.color}
-          opacity={parallel ? 0.55 : 0.85}
+      {hasPhoto ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={`/agents/${agent.slug}.png`}
+          alt={agent.name}
+          width={size}
+          height={size}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            display: "block",
+            // In Sigma mode, push the photo toward the dusky-purple register.
+            filter: parallel
+              ? "saturate(.55) hue-rotate(220deg) brightness(.82) contrast(1.05)"
+              : "saturate(.95) contrast(1.02)",
+          }}
         />
-        <circle
-          cx="28"
-          cy="24"
-          r="13"
-          fill={`url(#g-${agent.slug}-${parallel ? "p" : "r"})`}
-        />
-        <path
-          d={hairPath(agent.slug)}
-          fill={agent.color}
-          opacity={parallel ? 0.7 : 0.92}
-        />
-        <rect width="56" height="56" fill="url(#paper-grain)" opacity="0.18" />
-      </svg>
-      {label && (
+      ) : (
+        <svg viewBox="0 0 56 56" width={size} height={size} aria-hidden="true">
+          <defs>
+            <radialGradient
+              id={`g-${agent.slug}-${parallel ? "p" : "r"}`}
+              cx="50%"
+              cy="40%"
+              r="60%"
+            >
+              <stop offset="0%" stopColor={lighten(tone, 0.18)} />
+              <stop offset="100%" stopColor={tone} />
+            </radialGradient>
+          </defs>
+          <path
+            d="M -2 60 Q 8 42 28 42 Q 48 42 58 60 Z"
+            fill={agent.color}
+            opacity={parallel ? 0.55 : 0.85}
+          />
+          <circle
+            cx="28"
+            cy="24"
+            r="13"
+            fill={`url(#g-${agent.slug}-${parallel ? "p" : "r"})`}
+          />
+          <path
+            d={hairPath(agent.slug)}
+            fill={agent.color}
+            opacity={parallel ? 0.7 : 0.92}
+          />
+          <rect width="56" height="56" fill="url(#paper-grain)" opacity="0.18" />
+        </svg>
+      )}
+      {label && !hasPhoto && (
         <span
           style={{
             position: "absolute",
