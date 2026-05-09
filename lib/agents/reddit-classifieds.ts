@@ -73,16 +73,25 @@ async function executeReddit(
     return [];
   }
   const json: {
-    data?: { children?: { data: RedditPost }[]; posts?: RedditPost[] };
+    data?: {
+      posts_list?: Array<{ kind?: string; data: RedditPost }>;
+      children?: Array<{ data: RedditPost }>;
+      posts?: RedditPost[];
+    };
     successful?: boolean;
-    error?: string;
+    error?: string | null;
   } = await res.json();
   if (json.successful === false) {
     console.warn(`[composio] /${subreddit} action failed: ${json.error}`);
     return [];
   }
-  // Composio returns either {data:{children:[{data:post}]}} (Reddit-shaped)
-  // or {data:{posts:[post]}} depending on the action version. Handle both.
+  // Composio's REDDIT_RETRIEVE_REDDIT_POST returns data.posts_list, where each
+  // entry is the standard Reddit listing child: { kind: "t3", data: post }.
+  // Older shapes (data.children, data.posts) are kept as fallbacks.
+  const list = json.data?.posts_list;
+  if (list && Array.isArray(list)) {
+    return list.map((c) => c.data).filter(Boolean);
+  }
   const children = json.data?.children;
   if (children && Array.isArray(children)) {
     return children.map((c) => c.data).filter(Boolean);
