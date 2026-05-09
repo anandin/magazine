@@ -96,11 +96,12 @@ Research the topic with web_search. Then file BOTH drafts in YOUR voice — not 
   // Per-writer model + sampling parameters. Voss runs cold on Opus; Marigold
   // runs hot on Haiku; Okafor is loose on Opus; etc.
   //
-  // Anthropic constraints: Opus 4.7 doesn't accept `temperature` (only top_p).
-  // Sonnet/Haiku reject having both `temperature` and `top_p` set together.
-  // So we pick exactly one knob per writer:
-  //   Opus  → top_p
-  //   other → temperature
+  // Anthropic constraints in late 2026:
+  //   Opus 4.7 has deprecated BOTH temperature and top_p — it runs at default
+  //     sampling. Voss/Okafor/Solanke get their voice variance from prompts +
+  //     structural rules only.
+  //   Sonnet/Haiku still accept temperature (one of temp or top_p, not both).
+  // We use temperature on the non-Opus writers and pass nothing for Opus.
   const model = persona.model_id || "claude-opus-4-7";
   const isOpus = /opus/i.test(model);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -111,9 +112,7 @@ Research the topic with web_search. Then file BOTH drafts in YOUR voice — not 
     tools: WEB_SEARCH_TOOLS,
     messages: [{ role: "user", content: userPrompt }],
   };
-  if (isOpus) {
-    params.top_p = persona.top_p ?? 0.95;
-  } else {
+  if (!isOpus) {
     params.temperature = persona.temperature ?? 0.7;
   }
   const response = await anthropic().messages.create(params);
