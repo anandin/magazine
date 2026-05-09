@@ -96,15 +96,24 @@ Research the topic with web_search. Then file BOTH drafts in YOUR voice — not 
   // Per-writer model + sampling parameters. Voss runs cold on Opus; Marigold
   // runs hot on Haiku; Okafor is loose on Opus; etc. The whole point is that
   // these dimensions vary so the prose varies.
-  const response = await anthropic().messages.create({
-    model: persona.model_id || "claude-opus-4-7",
+  //
+  // Opus 4.7 has deprecated `temperature`, so for that model we vary only via
+  // top_p and the structural rules. Sonnet/Haiku still take both.
+  const model = persona.model_id || "claude-opus-4-7";
+  const supportsTemperature = !/opus-4-7/i.test(model);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const params: any = {
+    model,
     max_tokens: 6000,
-    temperature: persona.temperature ?? 0.7,
     top_p: persona.top_p ?? 1.0,
     system,
     tools: WEB_SEARCH_TOOLS,
     messages: [{ role: "user", content: userPrompt }],
-  });
+  };
+  if (supportsTemperature) {
+    params.temperature = persona.temperature ?? 0.7;
+  }
+  const response = await anthropic().messages.create(params);
 
   const text = response.content
     .flatMap((b) => (b.type === "text" ? [b.text] : []))
