@@ -1,5 +1,11 @@
 import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
+
+interface CookieToSet {
+  name: string;
+  value: string;
+  options?: CookieOptions;
+}
 
 // Auth-aware Supabase client. Reads the current user's session from cookies
 // and applies their identity on every query (RLS uses auth.uid()). Use this
@@ -14,7 +20,7 @@ export async function supabaseAuth() {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(toSet) {
+        setAll(toSet: CookieToSet[]) {
           for (const { name, value, options } of toSet) {
             try {
               cookieStore.set(name, value, options);

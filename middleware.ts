@@ -1,5 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
+
+interface CookieToSet {
+  name: string;
+  value: string;
+  options?: CookieOptions;
+}
 
 // Middleware refreshes the Supabase auth cookie on every request so server
 // components and route handlers see a current session. Without this, the
@@ -13,7 +19,7 @@ export async function middleware(request: NextRequest) {
     {
       cookies: {
         getAll: () => request.cookies.getAll(),
-        setAll: (toSet) => {
+        setAll: (toSet: CookieToSet[]) => {
           for (const { name, value } of toSet) {
             request.cookies.set(name, value);
           }
