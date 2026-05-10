@@ -19,6 +19,8 @@ const DEFAULTS: Omit<Preferences, "user_id"> = {
   expectations: "",
   default_mode: "real",
   onboarded: false,
+  tier: "free",
+  auto_publish: false,
 };
 
 export async function getPreferences(
