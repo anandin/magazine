@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { supabaseServer, DEFAULT_USER_ID } from "@/lib/supabase/server";
+import { supabaseServer } from "@/lib/supabase/server";
+import { requireUserId } from "@/lib/supabase/auth";
 
 export const runtime = "nodejs";
 
 const Body = z.object({
   kind: z.enum(["article", "persona"]),
   target_id: z.string().uuid(),
-  // article-only:
   mode: z.enum(["real", "parallel"]).optional(),
   verdict: z.enum(["up", "down", "more"]).optional(),
   style_score: z.number().int().min(1).max(5).optional(),
@@ -15,12 +15,18 @@ const Body = z.object({
   format_score: z.number().int().min(1).max(5).optional(),
   content_score: z.number().int().min(1).max(5).optional(),
   relevance_score: z.number().int().min(1).max(5).optional(),
-  // persona-only:
   rating: z.number().int().min(1).max(5).optional(),
   notes: z.string().max(2000).optional(),
 });
 
 export async function POST(req: Request) {
+  let userId: string;
+  try {
+    userId = await requireUserId();
+  } catch {
+    return NextResponse.json({ error: "not signed in" }, { status: 401 });
+  }
+
   let body: z.infer<typeof Body>;
   try {
     body = Body.parse(await req.json());
@@ -36,7 +42,7 @@ export async function POST(req: Request) {
       );
     }
     const { error } = await sb.from("article_feedback").insert({
-      user_id: DEFAULT_USER_ID,
+      user_id: userId,
       article_id: body.target_id,
       mode: body.mode,
       verdict: body.verdict,
@@ -50,7 +56,7 @@ export async function POST(req: Request) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   } else {
     const { error } = await sb.from("persona_feedback").insert({
-      user_id: DEFAULT_USER_ID,
+      user_id: userId,
       persona_id: body.target_id,
       rating: body.rating,
       notes: body.notes ?? "",

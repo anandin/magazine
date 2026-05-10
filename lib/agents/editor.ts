@@ -156,7 +156,7 @@ export async function generateIssue(
     }),
   );
 
-  await writeAds(issue.id);
+  await writeAds(issue.id, userId);
 
   await sb
     .from("issues")

@@ -1,5 +1,5 @@
 import { anthropic, MODEL_FAST } from "@/lib/anthropic";
-import { supabaseServer, DEFAULT_USER_ID } from "@/lib/supabase/server";
+import { supabaseServer } from "@/lib/supabase/server";
 import { getPreferences } from "@/lib/personalize";
 import { fetchRealClassifieds } from "@/lib/agents/reddit-classifieds";
 
@@ -65,9 +65,9 @@ ${missing
   .join("\n")}
 </classifieds>`;
 
-export async function writeAds(issueId: string): Promise<void> {
+export async function writeAds(issueId: string, userId: string): Promise<void> {
   const sb = supabaseServer();
-  const prefs = await getPreferences(DEFAULT_USER_ID);
+  const prefs = await getPreferences(userId);
   const city = prefs.city || "Cedar Hollow";
 
   // Reddit classifieds first — rough edges, real local life.

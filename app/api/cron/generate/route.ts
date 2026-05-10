@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { generateIssue } from "@/lib/agents/editor";
-import { supabaseServer, DEFAULT_USER_ID } from "@/lib/supabase/server";
+import { supabaseServer } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-// Hit by Vercel Cron twice a day (morning + evening). Vercel sends
-// `Authorization: Bearer <CRON_SECRET>` when the env var is set; we reject
-// anything else so the route can't be triggered from the public internet.
+// Vercel Cron hits this twice a day. We only generate for users who have
+// explicitly opted in via auto_publish=true (premium feature) and haven't
+// already received an issue in the last 4 hours.
 export async function GET(req: Request) {
   const auth = req.headers.get("authorization");
   const expected = process.env.CRON_SECRET;
@@ -15,29 +15,42 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  // At-least-once delivery guard: if an issue was created in the last 4 hours,
-  // skip. Prevents double-runs on retry.
   const sb = supabaseServer();
-  const since = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
-  const { data: recent } = await sb
-    .from("issues")
-    .select("id")
-    .eq("user_id", DEFAULT_USER_ID)
-    .gte("created_at", since)
-    .limit(1);
-  if (recent && recent.length > 0) {
-    return NextResponse.json({
-      skipped: true,
-      reason: "issue already generated in last 4h",
-      issue_id: recent[0].id,
-    });
+  const { data: optedIn } = await sb
+    .from("preferences")
+    .select("user_id, tier")
+    .eq("auto_publish", true)
+    .eq("tier", "premium");
+
+  if (!optedIn || optedIn.length === 0) {
+    return NextResponse.json({ ok: true, generated: 0, reason: "no opted-in users" });
   }
 
-  try {
-    const id = await generateIssue(DEFAULT_USER_ID);
-    return NextResponse.json({ ok: true, issue_id: id });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "unknown error";
-    return NextResponse.json({ error: msg }, { status: 500 });
+  const since = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
+  const results: Array<{ user_id: string; issue_id?: string; skipped?: boolean }> = [];
+
+  // Sequential; running issue generation in parallel against many users
+  // would saturate Anthropic rate limits.
+  for (const row of optedIn) {
+    const userId = row.user_id as string;
+    const { data: recent } = await sb
+      .from("issues")
+      .select("id")
+      .eq("user_id", userId)
+      .gte("created_at", since)
+      .limit(1);
+    if (recent && recent.length > 0) {
+      results.push({ user_id: userId, skipped: true });
+      continue;
+    }
+    try {
+      const id = await generateIssue(userId);
+      results.push({ user_id: userId, issue_id: id });
+    } catch (e) {
+      console.warn(`[cron] generate failed for ${userId}:`, e);
+      results.push({ user_id: userId, skipped: true });
+    }
   }
+
+  return NextResponse.json({ ok: true, generated: results.length, results });
 }

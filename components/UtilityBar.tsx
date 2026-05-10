@@ -1,5 +1,6 @@
 "use client";
 
+import { SignOutButton } from "./SignInButton";
 import type { Issue, Mode } from "@/lib/types";
 
 interface Props {
@@ -37,6 +38,7 @@ export function UtilityBar({
           <button type="button" onClick={onOpenPrefs}>
             My Edition
           </button>
+          <SignOutButton />
         </div>
         <div className="mag-util-mode">
           <button

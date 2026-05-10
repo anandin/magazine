@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { supabaseServer, DEFAULT_USER_ID } from "@/lib/supabase/server";
+import { supabaseServer } from "@/lib/supabase/server";
+import { requireUserId } from "@/lib/supabase/auth";
 import { getPreferences } from "@/lib/personalize";
 
 export const runtime = "nodejs";
@@ -24,23 +25,36 @@ const Body = z.object({
   expectations: z.string().max(2000).default(""),
   default_mode: z.enum(["real", "parallel"]).default("real"),
   onboarded: z.boolean().default(true),
+  auto_publish: z.boolean().default(false),
 });
 
 export async function GET() {
-  const prefs = await getPreferences();
+  let userId: string;
+  try {
+    userId = await requireUserId();
+  } catch {
+    return NextResponse.json({ error: "not signed in" }, { status: 401 });
+  }
+  const prefs = await getPreferences(userId);
   return NextResponse.json(prefs);
 }
 
 export async function POST(req: Request) {
+  let userId: string;
+  try {
+    userId = await requireUserId();
+  } catch {
+    return NextResponse.json({ error: "not signed in" }, { status: 401 });
+  }
   let body: z.infer<typeof Body>;
   try {
     body = Body.parse(await req.json());
-  } catch (e) {
+  } catch {
     return NextResponse.json({ error: "invalid body" }, { status: 400 });
   }
   const sb = supabaseServer();
   const { error } = await sb.from("preferences").upsert({
-    user_id: DEFAULT_USER_ID,
+    user_id: userId,
     ...body,
     updated_at: new Date().toISOString(),
   });

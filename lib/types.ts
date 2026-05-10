@@ -117,6 +117,8 @@ export interface Preferences {
   expectations: string;
   default_mode: Mode;
   onboarded: boolean;
+  tier: "free" | "premium";
+  auto_publish: boolean;
 }
 
 export interface ChatMessage {
