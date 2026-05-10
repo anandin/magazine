@@ -35,7 +35,15 @@ export async function POST() {
       tier: decision.tier,
     });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "unknown error";
+    // Surface the real error — "unknown error" was hiding Supabase RLS
+    // rejections and Anthropic 4xx responses, which made debugging hard.
+    const msg =
+      e instanceof Error
+        ? e.message
+        : typeof e === "object" && e !== null
+          ? JSON.stringify(e)
+          : String(e);
+    console.error("[generate] failed:", e);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
