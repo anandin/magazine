@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "The Cedar Hollow Sentinel",
+  title: "The Sentinel",
   description:
-    "A small, opinionated magazine — six writers, two registers (real and Sigma), reported on foot and edited on paper.",
+    "A small, opinionated magazine — six writers, two registers (real and Sigma), reported on foot and edited on paper. Cover reads 'The Cedar Hollow Sentinel.'",
 };
 
 export default function RootLayout({
