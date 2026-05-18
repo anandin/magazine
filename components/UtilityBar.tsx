@@ -6,17 +6,21 @@ import type { Issue, Mode } from "@/lib/types";
 interface Props {
   mode: Mode;
   issue?: Issue | null;
+  busy?: boolean;
   onToggleMode: () => void;
   onOpenPrefs: () => void;
   onOpenMasthead: () => void;
+  onRegenerate?: () => void;
 }
 
 export function UtilityBar({
   mode,
   issue,
+  busy = false,
   onToggleMode,
   onOpenPrefs,
   onOpenMasthead,
+  onRegenerate,
 }: Props) {
   const parallel = mode === "parallel";
   const stamp = issue
@@ -38,6 +42,22 @@ export function UtilityBar({
           <button type="button" onClick={onOpenPrefs}>
             My Edition
           </button>
+          {onRegenerate && (
+            <button
+              type="button"
+              onClick={onRegenerate}
+              disabled={busy}
+              title="Commission a fresh issue with your current settings"
+              style={{
+                background: parallel ? "var(--accent)" : "var(--paper)",
+                color: parallel ? "#1a0024" : "var(--ink)",
+                borderColor: "transparent",
+                fontWeight: 600,
+              }}
+            >
+              {busy ? "Going to press…" : "New issue"}
+            </button>
+          )}
           <SignOutButton />
         </div>
         <div className="mag-util-mode">

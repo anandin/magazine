@@ -133,9 +133,11 @@ export function MagazineApp({
       <UtilityBar
         mode={mode}
         issue={issue}
+        busy={regenerating}
         onToggleMode={toggleMode}
         onOpenPrefs={() => setDrawerOpen(true)}
         onOpenMasthead={() => setMastheadOpen(true)}
+        onRegenerate={regenerateIssue}
       />
 
       <div className="mag-paper">
